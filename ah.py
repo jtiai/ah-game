@@ -41,7 +41,7 @@ TITLE_SCREEN = 1
 GAME = 2
 GAME_OVER = 3
 GAME_COUNTDOWN = 4
-
+GAME_AREA = pg.Rect((0, 40), (639, 400))
 BLACK = (0, 0, 0)
 AMBER = (255, 191, 0)
 GREEN = (51, 255, 0)
@@ -85,7 +85,7 @@ class Bubble:
 class Game:
     def __init__(self):
         pg.init()
-        self.screen = pg.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
+        self.screen = pg.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT), pg.FULLSCREEN | pg.SCALED)
         self.clock = pg.time.Clock()
 
         self.state = TITLE_SCREEN
@@ -107,6 +107,8 @@ class Game:
             for event in pg.event.get():
                 if event.type == pg.QUIT:
                     sys.exit()
+                if event.type == pg.KEYDOWN and event.key == pg.K_ESCAPE:
+                    sys.exit()
                 if event.type == pg.MOUSEBUTTONUP:
                     in_title_screen = False
 
@@ -117,7 +119,8 @@ class Game:
                 "You are the green box trying to catch the appearing\n" +
                 "bubbles by clicking towards them with your mouse.\n" +
                 "The faster you click, the faster your player moves.\n" +
-                "Be quick, you have 30 seconds...", midbottom=(SCREEN_WIDTH // 2, SCREEN_HEIGHT - 5), color=AMBER,
+                "Be quick, you have only 30 seconds.\n\n" +
+                "Press ESC to quit.", midbottom=(SCREEN_WIDTH // 2, SCREEN_HEIGHT - 5), color=AMBER,
                 fontsize=18, align="left"
             )
             pg.display.flip()
@@ -129,6 +132,7 @@ class Game:
 
         game_remaining = 30000
         count_down = 4000
+        speed_factor = 0.98
         while True:
             delta_time = self.clock.tick(FPS)
             self.screen.fill(BLACK)
@@ -145,6 +149,7 @@ class Game:
                         self.dst_vec = pg.Vector2(event.pos)
                         self.tgt_vec = self.dst_vec - self.src_vec
                         self.tgt_vec.normalize_ip()
+                        speed_factor = 0.98
                         if self.speed <= 5.0:
                             self.speed += 0.8
 
@@ -177,12 +182,19 @@ class Game:
                 ptext.draw(f"SCORE: {score:05}", topleft=(5, 5), fontsize=18, color=AMBER)
 
             if self.state == GAME:
+                pg.draw.rect(self.screen, AMBER, GAME_AREA, width=2)
+
                 game_remaining -= delta_time
                 if game_remaining <= 0:
                     self.state = GAME_OVER
                     bubbles = []
                     count_down = 10000
                     continue
+
+                # Speedometer
+                spd = int(630 * self.speed / 5.0)
+                speed_meter = pg.Rect((5, 445), (spd, 20))
+                self.screen.fill(AMBER, speed_meter)
 
                 next_bubble -= delta_time
                 if next_bubble <= 0:
@@ -199,13 +211,29 @@ class Game:
                     cur_vec = pg.Vector2(self.player_rect.center)
                     dist = self.dst_vec.distance_squared_to(cur_vec)
                     if dist <= 2:
-                        self.tgt_vec = None
-                        self.speed = 0
+                        speed_factor = 0.9
                     if self.speed > 0:
-                        self.speed *= 0.95
+                        self.speed *= speed_factor
                         if self.speed < 0.05:
                             self.speed = 0
                             self.tgt_vec = None
+
+                    if self.player_rect.left < GAME_AREA.left + 2:
+                        self.tgt_vec.x = -self.tgt_vec.x
+                        self.src_vec += self.tgt_vec * self.speed
+                        self.player_rect.centerx = int(self.src_vec.x)
+                    if self.player_rect.right > GAME_AREA.right - 2:
+                        self.tgt_vec.x = -self.tgt_vec.x
+                        self.src_vec += self.tgt_vec * self.speed
+                        self.player_rect.centerx = int(self.src_vec.x)
+                    if self.player_rect.top < GAME_AREA.top + 2:
+                        self.tgt_vec.y = -self.tgt_vec.y
+                        self.src_vec += self.tgt_vec * self.speed
+                        self.player_rect.centery = int(self.src_vec.y)
+                    if self.player_rect.bottom > GAME_AREA.bottom - 2:
+                        self.tgt_vec.y = -self.tgt_vec.y
+                        self.src_vec += self.tgt_vec * self.speed
+                        self.player_rect.centery = int(self.src_vec.y)
 
                 for bubble in bubbles[:]:
                     if bubble.check_collision(self.player_rect):
