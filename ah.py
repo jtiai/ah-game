@@ -54,7 +54,7 @@ BLACK = (0, 0, 0)
 AMBER = (255, 191, 0)
 GREEN = (51, 255, 0)
 
-FONT_NAME = get_resource("fonts/RussoOne-Regular.ttf")
+FONT_NAME = get_resource("fonts/russoone-regular.ttf")
 
 ptext.DEFAULT_FONT_NAME = FONT_NAME
 
