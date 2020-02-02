@@ -5,6 +5,7 @@ verify_ssl = true
 
 [dev-packages]
 pyinstaller = {file = "https://github.com/pyinstaller/pyinstaller/tarball/develop"}
+ipython = "*"
 
 [packages]
 pygame = "==2.0.0.dev6"

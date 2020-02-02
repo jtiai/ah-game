@@ -34,13 +34,6 @@ import sys
 # Initialize Pygame
 pg.init()
 
-BUNDLE_DIR = getattr(sys, "_MEIPASS", os.path.abspath(os.path.dirname(__file__)))
-
-
-def get_resource(resource):
-    return os.path.join(BUNDLE_DIR, resource)
-
-
 SCREEN_WIDTH = 640
 SCREEN_HEIGHT = 480
 FPS = 60
@@ -54,25 +47,25 @@ BLACK = (0, 0, 0)
 AMBER = (255, 191, 0)
 GREEN = (51, 255, 0)
 
-FONT_NAME = get_resource("fonts/russoone-regular.ttf")
+FONT_NAME = "fonts/russoone-regular.ttf"
 
 ptext.DEFAULT_FONT_NAME = FONT_NAME
 
 SONGS = (
-    get_resource("music/bouncing-around-in-pixel-town.mp3"),
-    get_resource("music/carefree-days-in-groovyville.mp3"),
-    get_resource("music/city-of-tomorrow.mp3"),
-    get_resource("music/pelican-bay-tiki-party.mp3"),
-    get_resource("music/trouble-in-a-digital-city.mp3"),
+    "music/bouncing-around-in-pixel-town.mp3",
+    "music/carefree-days-in-groovyville.mp3",
+    "music/city-of-tomorrow.mp3",
+    "music/pelican-bay-tiki-party.mp3",
+    "music/trouble-in-a-digital-city.mp3",
 )
 
-GAME_OVER_SONG = get_resource("music/cyber-teen.mp3")
+GAME_OVER_SONG = "music/cyber-teen.mp3"
 
 SOUNDS = {
-    "pick": pg.mixer.Sound(get_resource("sfx/pick.ogg")),
-    "bubble": pg.mixer.Sound(get_resource("sfx/bubble.ogg")),
-    "end": pg.mixer.Sound(get_resource("sfx/end.ogg")),
-    "player": pg.mixer.Sound(get_resource("sfx/player.ogg")),
+    "pick": pg.mixer.Sound("sfx/pick.ogg"),
+    "bubble": pg.mixer.Sound("sfx/bubble.ogg"),
+    "end": pg.mixer.Sound("sfx/end.ogg"),
+    "player": pg.mixer.Sound("sfx/player.ogg"),
 }
 
 END_MUSIC = pg.USEREVENT + 2
@@ -82,7 +75,8 @@ class Bubble:
     def __init__(self, pos, lifetime):
         self.lifetime = lifetime
         self.liferemaining = lifetime
-        self.image = pg.Surface((30, 30))
+        self.image = pg.Surface((30, 30), pg.SRCALPHA)
+        self.image.set_colorkey(BLACK)
         pg.draw.circle(self.image, AMBER, (15, 15), 15)
         self.rect = self.image.get_rect(center=pos)
         self.scaled_rect = self.rect.copy()
@@ -241,8 +235,26 @@ class Game:
         context.next_bubble -= delta_time
         if context.next_bubble <= 0:
             context.next_bubble = random.randint(500, 2000)
-            x = random.randint(50, 590)
-            y = random.randint(50, 430)
+            # Spawn a new bubble
+            # Make sure that new bubble doesn't overlap existing
+            # bubbles and is not near vicinity of the player
+            accepted = False
+            x, y = 0, 0
+            while not accepted:
+                accepted = True
+                x = random.randint(50, 590)
+                y = random.randint(50, 430)
+                new_vec = pg.Vector2((x, y))
+                # Check distance other bubbles
+                for bubble in context.bubbles:
+                    bubble_vec = pg.Vector2(bubble.rect.center)
+                    if new_vec.distance_squared_to(bubble_vec) < 1600:
+                        # Bubble too close to another bubble
+                        accepted = False
+                        break
+                player_vec = pg.Vector2(context.player_rect.center)
+                if new_vec.distance_squared_to(player_vec) < 3600:
+                    accepted = False
             new_bubble = Bubble((x, y), random.randint(1000, 7000))
             context.bubbles.append(new_bubble)
             SOUNDS["bubble"].play()
@@ -261,7 +273,7 @@ class Game:
                     context.speed = 0
                     context.tgt_vec = None
             if context.player_rect.left < GAME_AREA.left + 2:
-                context.tgt_vec.x = -self.game_context.tgt_vec.x
+                context.tgt_vec.x = -context.tgt_vec.x
                 context.src_vec += context.tgt_vec * context.speed
                 context.player_rect.centerx = int(context.src_vec.x)
             if context.player_rect.right > GAME_AREA.right - 2:
@@ -270,7 +282,7 @@ class Game:
                 context.player_rect.centerx = int(context.src_vec.x)
             if context.player_rect.top < GAME_AREA.top + 2:
                 context.tgt_vec.y = -context.tgt_vec.y
-                context.src_vec += context.tgt_vec * context.game_context.speed
+                context.src_vec += context.tgt_vec * context.speed
                 context.player_rect.centery = int(context.src_vec.y)
             if context.player_rect.bottom > GAME_AREA.bottom - 2:
                 context.tgt_vec.y = -context.tgt_vec.y
@@ -301,6 +313,7 @@ class Game:
 
         context.time_remaining -= delta_time
         if context.time_remaining <= 0:
+            SOUNDS["player"].stop()
             return self.gameover_start
 
         context.old_speed = context.speed
@@ -341,21 +354,21 @@ class Game:
 
     def gameover_event(self, context, event):
         if context.count < 50000 and event.type == pg.MOUSEBUTTONDOWN:
-            pg.mixer.music.fadeout(500)
             context.count = 0
 
     def gameover_update(self, context, delta_time):
         context.count -= delta_time
         if context.count < context.end_jingle_start:
-            context.end_jingle_start = -1
+            context.end_jingle_start = -9999
             SOUNDS["end"].play()
         if context.count < context.end_jingle_stop:
-            context.end_jingle_stop = -1
+            context.end_jingle_stop = -9999
             pg.mixer.music.load(GAME_OVER_SONG)
             pg.mixer.music.play()
             pg.mixer.music.set_endevent(END_MUSIC)
 
         if context.count <= 0:
+            pg.mixer.music.fadeout(500)
             return self.title_start
 
     def gameover_draw(self, context, surface):
@@ -368,6 +381,8 @@ class Game:
         ptext.draw(
             f"SCORE: {context.score:05}", topleft=(5, 5), fontsize=18, color=AMBER,
         )
+        if context.count < 50000:
+            ptext.draw("PRESS MOUSE BUTTON TO RESTART", midbottom=(SCREEN_WIDTH // 2, SCREEN_HEIGHT - 5), fontsize=18, color=AMBER)
 
     def game_loop(self):
         while True:
