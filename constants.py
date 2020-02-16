@@ -13,13 +13,13 @@ AMBER = (255, 191, 0)
 GREEN = (51, 255, 0)
 FONT_NAME = "fonts/notosanshk-black.otf"
 SONGS = (
-    "music/bouncing-around-in-pixel-town.mp3",
-    "music/carefree-days-in-groovyville.mp3",
-    "music/city-of-tomorrow.mp3",
-    "music/pelican-bay-tiki-party.mp3",
-    "music/trouble-in-a-digital-city.mp3",
+    "music/bouncing-around-in-pixel-town.ogg",
+    "music/carefree-days-in-groovyville.ogg",
+    "music/city-of-tomorrow.ogg",
+    "music/pelican-bay-tiki-party.ogg",
+    "music/trouble-in-a-digital-city.ogg",
 )
-GAME_OVER_SONG = "music/cyber-teen.mp3"
+GAME_OVER_SONG = "music/cyber-teen.ogg"
 HIGH_SCORES = [(idx * 10, "JANU") for idx in range(20, 0, -1)]
 
 HIGHSCORE_SCROLL_TOP_Y = 200
