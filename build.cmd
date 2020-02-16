@@ -1,6 +1,7 @@
 pyinstaller ^
     --clean ^
     --additional-hooks-dir hooks ^
+    --icon gfx/ah-game-icons.ico ^
     --onefile ^
     -w ^
     ah.py

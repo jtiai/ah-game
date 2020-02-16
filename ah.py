@@ -37,8 +37,9 @@ from constants import SCREEN_WIDTH, SCREEN_HEIGHT, FPS, TITLE_SCREEN, GAME, GAME
 
 # Initialize Pygame
 pg.init()
+pg.display.set_icon(pg.image.load("gfx/window-icon.png"))
 screen = pg.display.set_mode(
-    (SCREEN_WIDTH, SCREEN_HEIGHT) #, pg.FULLSCREEN | pg.SCALED
+    (SCREEN_WIDTH, SCREEN_HEIGHT), pg.FULLSCREEN | pg.SCALED
 )
 
 ptext.DEFAULT_FONT_NAME = FONT_NAME
