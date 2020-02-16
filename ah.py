@@ -191,7 +191,8 @@ class Game:
         self.screen = screen
         self.clock = pg.time.Clock()
 
-        self.songs = SONGS[:]
+        self.songs = list(SONGS[:])
+        random.shuffle(self.songs)
         self.song_index = 0
         pg.mixer.music.set_endevent(END_MUSIC)
         pg.mixer.music.load(self.songs[self.song_index])
