@@ -9,6 +9,7 @@ ipython = "*"
 
 [packages]
 pygame = "==2.0.0.dev6"
+numpy = "*"
 
 [requires]
 python_version = "3.8"

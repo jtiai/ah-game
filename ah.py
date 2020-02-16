@@ -27,39 +27,21 @@
 
 import os
 import random
+import json
 import pygame as pg
 import ptext
 import sys
 
+from constants import SCREEN_WIDTH, SCREEN_HEIGHT, FPS, TITLE_SCREEN, GAME, GAME_OVER, GAME_COUNTDOWN, GAME_AREA, BLACK, \
+    AMBER, FONT_NAME, SONGS, GAME_OVER_SONG, HIGH_SCORES, HIGHSCORE_SCROLL_TOP_Y, HIGHSCORE_SCROLL_HEIGHT
+
 # Initialize Pygame
 pg.init()
-
-SCREEN_WIDTH = 640
-SCREEN_HEIGHT = 480
-FPS = 60
-
-TITLE_SCREEN = 1
-GAME = 2
-GAME_OVER = 3
-GAME_COUNTDOWN = 4
-GAME_AREA = pg.Rect((0, 40), (639, 400))
-BLACK = (0, 0, 0)
-AMBER = (255, 191, 0)
-GREEN = (51, 255, 0)
-
-FONT_NAME = "fonts/russoone-regular.ttf"
-
-ptext.DEFAULT_FONT_NAME = FONT_NAME
-
-SONGS = (
-    "music/bouncing-around-in-pixel-town.mp3",
-    "music/carefree-days-in-groovyville.mp3",
-    "music/city-of-tomorrow.mp3",
-    "music/pelican-bay-tiki-party.mp3",
-    "music/trouble-in-a-digital-city.mp3",
+screen = pg.display.set_mode(
+    (SCREEN_WIDTH, SCREEN_HEIGHT) #, pg.FULLSCREEN | pg.SCALED
 )
 
-GAME_OVER_SONG = "music/cyber-teen.mp3"
+ptext.DEFAULT_FONT_NAME = FONT_NAME
 
 SOUNDS = {
     "pick": pg.mixer.Sound("sfx/pick.ogg"),
@@ -70,48 +52,143 @@ SOUNDS = {
 
 END_MUSIC = pg.USEREVENT + 2
 
+BUBBLE_IMAGE = pg.image.load("gfx/normal_ball.png").convert_alpha()
+BUBBLE_IMAGE.set_colorkey(BLACK)
+SPECIAL_IMAGE = pg.image.load("gfx/special.png").convert_alpha()
+SPECIAL_IMAGE.set_colorkey(BLACK)
+
+
+def vec_to_int(vector):
+    return tuple(map(int, vector))
+
 
 class Bubble:
     def __init__(self, pos, lifetime):
         self.lifetime = lifetime
         self.liferemaining = lifetime
-        self.image = pg.Surface((30, 30), pg.SRCALPHA)
-        self.image.set_colorkey(BLACK)
-        pg.draw.circle(self.image, AMBER, (15, 15), 15)
+        self.image = BUBBLE_IMAGE
         self.rect = self.image.get_rect(center=pos)
         self.scaled_rect = self.rect.copy()
+        self.angle = random.uniform(0, 360)
+        self.rotation = random.uniform(-2.0, 2.0)
 
     def update(self, delta_time):
+        self.angle += self.rotation
         self.liferemaining -= delta_time
         if self.liferemaining <= 0:
             return False
         return True
 
     def draw(self, surface):
-        # Scale surface
-        w, h = self.rect.size
-        w = int(w * self.liferemaining / self.lifetime)
-        h = int(h * self.liferemaining / self.lifetime)
-        img = pg.transform.scale(self.image, (w, h))
+        scale = self.liferemaining / self.lifetime
+        img = pg.transform.rotozoom(self.image, self.angle, scale)
         self.scaled_rect = img.get_rect(center=self.rect.center)
         surface.blit(img, self.scaled_rect)
 
-    def get_points(self):
-        return max(int(self.liferemaining / self.lifetime * 20), 1)
+    def play_sound(self):
+        SOUNDS["pick"].play()
+
+    def do_action(self, context):
+        context.score += max(int(self.liferemaining / self.lifetime * 20), 1)
 
     def check_collision(self, rect):
         return self.scaled_rect.colliderect(rect)
 
 
+class Powerup(Bubble):
+    def __init__(self, pos, lifetime):
+        super().__init__(pos, lifetime)
+        self.image = SPECIAL_IMAGE
+
+    def play_sound(self):
+        SOUNDS["pick"].play()
+
+    def do_action(self, context):
+        context.time_remaining += random.randint(5, 15) * 1000
+
+
+class Player:
+    MIN_DIST = 10
+    MAX_DIST = 20
+
+    def __init__(self):
+        self.images = [
+            pg.image.load("gfx/slimeball_100.png").convert_alpha(),
+            pg.image.load("gfx/slimeball_80.png").convert_alpha(),
+            pg.image.load("gfx/slimeball_64.png").convert_alpha(),
+            pg.image.load("gfx/slimeball_51.png").convert_alpha(),
+            pg.image.load("gfx/slimeball_40.png").convert_alpha(),
+        ]
+        self.pos = [pg.Vector2() for _ in range(5)]
+        self.vec = pg.Vector2()
+        self.vec_dt = pg.Vector2()
+
+    @property
+    def rect(self):
+        return self.images[0].get_rect(center=(vec_to_int(self.pos[0])))
+
+    def set_pos(self, x, y):
+        self.pos[0].xy = (x, y)
+        self.pos[1].xy = (x + 18, y)
+        self.pos[2].xy = (x + 28, y)
+        self.pos[3].xy = (x + 38, y)
+        self.pos[4].xy = (x + 48, y)
+
+    def update(self, target_vec, speed):
+        self.pos[0] += target_vec * speed
+        rect = self.images[0].get_rect(center=vec_to_int(self.pos[0]))
+
+        if rect.left < GAME_AREA.left + 2:
+            targt_vec.x = -target_vec.x
+            self.pos[0] += target_vec * speed
+            rect.centerx = int(self.vec.x)
+        if rect.right > GAME_AREA.right - 2:
+            target_vec.x = -target_vec.x
+            self.pos[0] += target_vec * speed
+            rect.centerx = int(self.vec.x)
+        if rect.top < GAME_AREA.top + 2:
+            target_vec.y = -target_vec.y
+            self.pos[0] += target_vec * speed
+            rect.centery = int(self.vec.y)
+        if rect.bottom > GAME_AREA.bottom - 2:
+            target_vec.y = -target_vec.y
+            self.pos[0] += target_vec * speed
+            rect.centery = int(self.vec.y)
+        for i in range(1, 5):
+            tgt = self.pos[i-1]
+            src = self.pos[i]
+            src = src.lerp(tgt, 0.1)
+            dst = tgt - src
+            length = dst.length()  # Bad square root...
+            if length > self.MAX_DIST:
+                dst2 = pg.Vector2(dst)
+                dst.scale_to_length(self.MAX_DIST)
+                src += dst2 - dst
+            elif length < self.MIN_DIST:
+                dst2 = pg.Vector2(dst)
+                dst.scale_to_length(self.MIN_DIST)
+                src += dst2 - dst
+
+            self.pos[i] = src
+        return target_vec
+
+    def draw(self, surface):
+        rect = self.images[0].get_rect()
+        for image, vec in zip(reversed(self.images), reversed(self.pos)):
+            rect.center = vec_to_int(vec)
+            surface.blit(image, rect)
+
+
 class Context:
-    pass
+    def __init__(self, initial=None):
+        initial = initial or {}
+        for k, v in initial.items():
+            setattr(self, k, v)
 
 
 class Game:
-    def __init__(self):
-        self.screen = pg.display.set_mode(
-            (SCREEN_WIDTH, SCREEN_HEIGHT), pg.FULLSCREEN | pg.SCALED
-        )
+    def __init__(self, screen):
+        self.screen = screen
         self.clock = pg.time.Clock()
 
         self.songs = SONGS[:]
@@ -121,8 +198,7 @@ class Game:
         pg.mixer.music.play()
         pg.display.set_caption("ÄH!")
 
-        self.player = pg.Surface((25, 25))
-        self.player.fill(GREEN)
+        self.player = Player()
 
         self.game_state = {
             TITLE_SCREEN: (self.title_event, self.title_update, self.title_draw,),
@@ -135,14 +211,33 @@ class Game:
             GAME_OVER: (self.gameover_event, self.gameover_update, self.gameover_draw,),
         }
 
+        self.high_scores = HIGH_SCORES
+        self.load_highscores()
+
         self.state = None
         self.context = self.title_start(None)
+
+    def load_highscores(self):
+        highscore_file = os.path.join(os.path.expanduser('~'), 'Saved Games', 'AH Game', "highscore.json")
+        if not os.path.isfile(highscore_file):
+            self.save_highscores()
+        with open(highscore_file, "rt") as f:
+            self.high_scores = json.loads(f.read())
+
+
+    def save_highscores(self):
+        save_path = os.path.join(os.path.expanduser('~'), 'Saved Games', 'AH Game')
+        save_file = os.path.join(save_path, "highscore.json")
+        os.makedirs(save_path, exist_ok=True)
+        with open(save_file, "wt+") as f:
+            f.write(json.dumps(self.high_scores, indent=4))
 
     # Title screen
     def title_start(self, old_context):
         self.state = TITLE_SCREEN
         context = Context()
         context.done = False
+        context.name, context.name_pos = ptext.draw("ÄH!", midtop=(SCREEN_WIDTH // 2, 20), color=AMBER, fontsize=150, surf=None)
         return context
 
     def title_event(self, context, event):
@@ -156,7 +251,7 @@ class Game:
         return None
 
     def title_draw(self, context, surface):
-        ptext.draw("ÄH!", midtop=(SCREEN_WIDTH // 2, 20), color=AMBER, fontsize=40)
+        surface.blit(context.name, context.name_pos)
         ptext.draw(
             "CLICK MOUSE BUTTON\nTO BEGIN",
             center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2),
@@ -164,9 +259,9 @@ class Game:
             fontsize=40,
         )
         ptext.draw(
-            "You are the green box trying to catch the appearing\n"
+            "You are the green worm trying to catch the appearing\n"
             + "bubbles by clicking towards them with your mouse.\n"
-            + "The faster you click, the faster your player moves.\n"
+            + "The faster you click, the faster your worm moves.\n"
             + "Be quick, you have only 30 seconds.\n\n"
             + "Press ESC to quit.",
             midbottom=(SCREEN_WIDTH // 2, SCREEN_HEIGHT - 5),
@@ -205,19 +300,18 @@ class Game:
         self.state = GAME
         context = Context()
         context.player = self.player
-        player_rect = self.player.get_rect()
-        player_rect.centerx = random.randint(70, 570)
-        player_rect.centery = random.randint(50, 430)
-        context.player_rect = player_rect
-        context.src_vec = pg.Vector2(player_rect.center)
+        initial_pos = (random.randint(90, 550), random.randint(70, 410))
+        context.src_vec = pg.Vector2(initial_pos)
+        context.player.set_pos(*initial_pos)
         context.score = 0
         context.bubbles = []
         context.next_bubble = random.randint(1500, 5000)
         context.time_remaining = 30000
         context.speed_factor = 0.98
-        context.tgt_vec = None
+        context.tgt_vec = pg.Vector2()
         context.speed = 0.0
         context.old_speed = 0.0
+        context.dst_vec = pg.Vector2()
         return context
 
     def game_event(self, context, event):
@@ -238,6 +332,9 @@ class Game:
             # Spawn a new bubble
             # Make sure that new bubble doesn't overlap existing
             # bubbles and is not near vicinity of the player
+            bubble_class = Bubble
+            if random.randint(0, 10) == 0:
+                bubble_class = Powerup
             accepted = False
             x, y = 0, 0
             while not accepted:
@@ -252,48 +349,28 @@ class Game:
                         # Bubble too close to another bubble
                         accepted = False
                         break
-                player_vec = pg.Vector2(context.player_rect.center)
-                if new_vec.distance_squared_to(player_vec) < 3600:
+                if new_vec.distance_squared_to(context.player.vec) < 3600:
                     accepted = False
-            new_bubble = Bubble((x, y), random.randint(1000, 7000))
+            new_bubble = bubble_class((x, y), random.randint(1000, 7000))
             context.bubbles.append(new_bubble)
             SOUNDS["bubble"].play()
 
-        if context.tgt_vec:
-            context.src_vec += context.tgt_vec * context.speed
-            context.player_rect.centerx = int(context.src_vec.x)
-            context.player_rect.centery = int(context.src_vec.y)
-            cur_vec = pg.Vector2(context.player_rect.center)
-            dist_squared = context.dst_vec.distance_squared_to(cur_vec)
-            if dist_squared <= 2:
-                context.speed_factor = 0.9
-            if context.speed > 0:
-                context.speed *= context.speed_factor
-                if context.speed < 0.06:
-                    context.speed = 0
-                    context.tgt_vec = None
-            if context.player_rect.left < GAME_AREA.left + 2:
-                context.tgt_vec.x = -context.tgt_vec.x
-                context.src_vec += context.tgt_vec * context.speed
-                context.player_rect.centerx = int(context.src_vec.x)
-            if context.player_rect.right > GAME_AREA.right - 2:
-                context.tgt_vec.x = -context.tgt_vec.x
-                context.src_vec += context.tgt_vec * context.speed
-                context.player_rect.centerx = int(context.src_vec.x)
-            if context.player_rect.top < GAME_AREA.top + 2:
-                context.tgt_vec.y = -context.tgt_vec.y
-                context.src_vec += context.tgt_vec * context.speed
-                context.player_rect.centery = int(context.src_vec.y)
-            if context.player_rect.bottom > GAME_AREA.bottom - 2:
-                context.tgt_vec.y = -context.tgt_vec.y
-                context.src_vec += context.tgt_vec * context.speed
-                context.player_rect.centery = int(context.src_vec.y)
+        context.src_vec += context.tgt_vec * context.speed
+        context.tgt_vec = context.player.update(context.tgt_vec, context.speed)
+        cur_vec = context.player.pos[0]
+        dist_squared = context.dst_vec.distance_squared_to(cur_vec)
+        if dist_squared <= 2:
+            context.speed_factor = 0.9
+        if context.speed > 0:
+            context.speed *= context.speed_factor
+            if context.speed < 0.06:
+                context.speed = 0
 
         for bubble in context.bubbles[:]:
-            if bubble.check_collision(context.player_rect):
+            if bubble.check_collision(context.player.rect):
                 # Player hit the bubble
-                SOUNDS["pick"].play()
-                context.score += bubble.get_points()
+                bubble.play_sound()
+                bubble.do_action(context)
                 context.bubbles.remove(bubble)
                 continue
             if not bubble.update(delta_time):
@@ -332,7 +409,8 @@ class Game:
             fontsize=18,
             color=AMBER,
         )
-        surface.blit(context.player, context.player_rect)
+        context.player.draw(surface)
+        #surface.blit(context.player, context.player_rect)
 
         # Speedmeter
         spd = int(630 * context.speed / 5.0)
@@ -350,14 +428,75 @@ class Game:
         context.played_fanfare = False
         pg.mixer.music.set_endevent()
         pg.mixer.music.fadeout(250)
+        context.is_high_score = context.score >= self.high_scores[-1][0]
+        context.high_score_name = ""
+
+        if not context.is_high_score:
+            self.gameover_highscores(context)
+
         return context
+
+    def gameover_highscores(self, context):
+        txt = ""
+        for score, name in self.high_scores:
+            txt += f"{score:04}  {name}\n"
+        tmp_img, _ = ptext.draw(
+            txt, topleft=(0, 0), fontsize=18, color=AMBER, surf=None
+        )
+
+        size = tmp_img.get_size()
+        size = (size[0], size[1] + 159)  # This needs to be one pixel less to avoid small glitch
+        highscore_img = pg.Surface(size)
+        rect = tmp_img.get_rect()
+        context.highscore_height = rect.height
+        highscore_img.blit(tmp_img, dest=rect)
+        rect.y = rect.height
+        rect.height = 159
+        highscore_img.blit(tmp_img, dest=rect)
+        context.highscore_img = highscore_img
+        context.highscore_rect = pg.Rect((0, 0), (rect.width, HIGHSCORE_SCROLL_HEIGHT))
+        context.highscore_top = 0
+
+        # Highscore faders
+        out_fader = pg.Surface((rect.width, 20), pg.SRCALPHA)
+        for f in range(20, 0, -1):
+            out_fader.fill((0, 0, 0, f * (255 / 20)), ((0, 20 - f), (rect.width, 1)))
+
+        in_fader = pg.transform.flip(out_fader, False, True)
+
+        context.out_fader = out_fader
+        context.out_fader_rect = out_fader.get_rect()
+        context.out_fader_rect.midtop = (SCREEN_WIDTH // 2, HIGHSCORE_SCROLL_TOP_Y)
+        context.in_fader = in_fader
+        context.in_fader_rect = in_fader.get_rect()
+        context.in_fader_rect.midbottom = (SCREEN_WIDTH // 2, HIGHSCORE_SCROLL_TOP_Y + HIGHSCORE_SCROLL_HEIGHT)
 
     def gameover_event(self, context, event):
         if context.count < 50000 and event.type == pg.MOUSEBUTTONDOWN:
             context.count = 0
+        if context.is_high_score and event.type == pg.KEYDOWN:
+            if event.key == pg.K_BACKSPACE:
+                context.high_score_name = context.high_score_name[:-1]
+                return
+            if event.key == pg.K_RETURN:
+                self.high_scores.append((context.score, context.high_score_name))
+                self.high_scores.sort(key=lambda x: x[0], reverse=True)
+                self.high_scores = self.high_scores[:-1]
+                context.is_high_score = False
+                self.save_highscores()
+                self.gameover_highscores(context)
+                return
+            if event.unicode.isalnum() and len(context.high_score_name) < 8:
+                context.high_score_name += event.unicode.upper()
 
     def gameover_update(self, context, delta_time):
         context.count -= delta_time
+        if not context.is_high_score:
+            context.highscore_top += 0.5
+            context.highscore_rect.top = int(context.highscore_top)
+            if context.highscore_rect.top >= context.highscore_height:
+                context.highscore_top = 0
+
         if context.count < context.end_jingle_start:
             context.end_jingle_start = -9999
             SOUNDS["end"].play()
@@ -374,13 +513,26 @@ class Game:
     def gameover_draw(self, context, surface):
         ptext.draw(
             "GAME OVER",
-            center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2),
+            center=(SCREEN_WIDTH // 2, 60),
             color=AMBER,
             fontsize=60,
         )
-        ptext.draw(
-            f"SCORE: {context.score:05}", topleft=(5, 5), fontsize=18, color=AMBER,
+        surf, pos = ptext.draw(
+            f"SCORE: {context.score:05}", midtop=(SCREEN_WIDTH // 2, 150), fontsize=18, color=AMBER,
         )
+        if context.is_high_score:
+            ptext.draw("YOU MADE HIGH SCORE!\nENTER YOUR NAME BELOW:", midtop=(SCREEN_WIDTH // 2, 100), fontsize=18,
+                       color=AMBER)
+            rect = surf.get_rect(topleft=pos)
+            rect.right += 10
+            ptext.draw(
+                f"{context.high_score_name}\u258E", topleft=rect.topright, fontsize=18, color=AMBER
+            )
+        else:
+            surface.blit(context.highscore_img, dest=(SCREEN_WIDTH // 2 - context.highscore_rect.width // 2, HIGHSCORE_SCROLL_TOP_Y), area=context.highscore_rect)
+            surface.blit(context.out_fader, dest=context.out_fader_rect)
+            surface.blit(context.in_fader, dest=context.in_fader_rect)
+
         if context.count < 50000:
             ptext.draw("PRESS MOUSE BUTTON TO RESTART", midbottom=(SCREEN_WIDTH // 2, SCREEN_HEIGHT - 5), fontsize=18, color=AMBER)
 
@@ -426,4 +578,4 @@ class Game:
 
 
 if __name__ == "__main__":
-    Game().game_loop()
+    Game(screen=screen).game_loop()

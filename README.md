@@ -7,7 +7,7 @@ You can download packaged version for Microsoft Windows
 from https://jtiai.itch.io/ah
 
 ## Assets
-Font `RussoOne-Regular.ttf` is licensed under the SIL Open Font License,
+Font `notosanshk-black.otf` is licensed under the SIL Open Font License,
 Version 1.1
 
 ptext.py is licensed under CC0 1.0 Universal license.
