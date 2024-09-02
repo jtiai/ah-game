@@ -1,0 +1,17 @@
+[tool.poetry]
+package-mode = false
+name = "ah-game"
+version = "1.0.0"
+description = "A simple PyGame clicking game"
+authors = ["Jani Tiainen <jani.tiainen.official@gmail.com>"]
+license = "BSD-3"
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.11"
+pygame-ce = "^2.5.1"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
